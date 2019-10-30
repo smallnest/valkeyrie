@@ -48,7 +48,10 @@ func New(endpoints []string, options *store.Config) (store.Store, error) {
 		password = options.Password
 	}
 
-	dbIndex, _ := strconv.Atoi(options.Bucket)
+	dbIndex := 0
+	if options != nil {
+		dbIndex, _ = strconv.Atoi(options.Bucket)
+	}
 
 	return newRedis(endpoints, password, dbIndex)
 }
