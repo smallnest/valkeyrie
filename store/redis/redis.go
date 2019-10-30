@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -46,10 +47,13 @@ func New(endpoints []string, options *store.Config) (store.Store, error) {
 	if options != nil && options.Password != "" {
 		password = options.Password
 	}
-	return newRedis(endpoints, password)
+
+	dbIndex, _ := strconv.Atoi(options.Bucket)
+
+	return newRedis(endpoints, password, dbIndex)
 }
 
-func newRedis(endpoints []string, password string) (*Redis, error) {
+func newRedis(endpoints []string, password string, dbIndex int) (*Redis, error) {
 	// TODO: use *redis.ClusterClient if we support miltiple endpoints
 	client := redis.NewClient(&redis.Options{
 		Addr:         endpoints[0],
@@ -57,6 +61,7 @@ func newRedis(endpoints []string, password string) (*Redis, error) {
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		Password:     password,
+		DB:           dbIndex,
 	})
 
 	// Listen to Keyspace events
