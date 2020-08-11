@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,7 +13,7 @@ import (
 	"github.com/abronan/valkeyrie"
 	"github.com/abronan/valkeyrie/store"
 
-	"gopkg.in/redis.v8"
+	redis "github.com/rpcxio/go-redis"
 )
 
 var (
@@ -68,7 +69,7 @@ func newRedis(endpoints []string, password string, dbIndex int) (*Redis, error) 
 	})
 
 	// Listen to Keyspace events
-	client.ConfigSet("notify-keyspace-events", "KEA")
+	client.ConfigSet(context.Background(), "notify-keyspace-events", "KEA")
 
 	return &Redis{
 		client: client,
@@ -120,7 +121,7 @@ func (r *Redis) setTTL(key string, val *store.KVPair, ttl time.Duration) error {
 		return err
 	}
 
-	return r.client.Set(key, valStr, ttl).Err()
+	return r.client.Set(context.Background(), key, valStr, ttl).Err()
 }
 
 // Get a value given its key
@@ -129,7 +130,7 @@ func (r *Redis) Get(key string, opts *store.ReadOptions) (*store.KVPair, error) 
 }
 
 func (r *Redis) get(key string) (*store.KVPair, error) {
-	reply, err := r.client.Get(key).Bytes()
+	reply, err := r.client.Get(context.Background(), key).Bytes()
 	if err != nil {
 		if err == redis.Nil {
 			return nil, store.ErrKeyNotFound
@@ -145,12 +146,16 @@ func (r *Redis) get(key string) (*store.KVPair, error) {
 
 // Delete the value at the specified key
 func (r *Redis) Delete(key string) error {
-	return r.client.Del(normalize(key)).Err()
+	return r.client.Del(context.Background(), normalize(key)).Err()
 }
 
 // Exists verify if a Key exists in the store
 func (r *Redis) Exists(key string, opts *store.ReadOptions) (bool, error) {
-	return r.client.Exists(normalize(key)).Result()
+	i, err := r.client.Exists(context.Background(), normalize(key)).Result()
+	if err != nil {
+		return false, err
+	}
+	return i == 1, nil
 }
 
 // Watch for changes on a key
@@ -242,10 +247,7 @@ type subscribe struct {
 }
 
 func newSubscribe(client *redis.Client, regex string) (*subscribe, error) {
-	ch, err := client.PSubscribe(regex)
-	if err != nil {
-		return nil, err
-	}
+	ch := client.PSubscribe(context.Background(), regex)
 	return &subscribe{
 		pubsub:  ch,
 		closeCh: make(chan struct{}),
@@ -273,7 +275,7 @@ func (s *subscribe) receiveLoop(msgCh chan *redis.Message, stopCh <-chan struct{
 		case <-stopCh:
 			return
 		default:
-			msg, err := s.pubsub.ReceiveMessage()
+			msg, err := s.pubsub.ReceiveMessage(context.Background())
 			if err != nil {
 				return
 			}
@@ -486,13 +488,13 @@ func (r *Redis) keys(regex string) ([]string, error) {
 
 	var allKeys []string
 
-	keys, nextCursor, err := r.client.Scan(startCursor, regex, defaultCount).Result()
+	keys, nextCursor, err := r.client.Scan(context.Background(), startCursor, regex, defaultCount).Result()
 	if err != nil {
 		return nil, err
 	}
 	allKeys = append(allKeys, keys...)
 	for nextCursor != endCursor {
-		keys, nextCursor, err = r.client.Scan(nextCursor, regex, defaultCount).Result()
+		keys, nextCursor, err = r.client.Scan(context.Background(), nextCursor, regex, defaultCount).Result()
 		if err != nil {
 			return nil, err
 		}
@@ -507,7 +509,7 @@ func (r *Redis) keys(regex string) ([]string, error) {
 
 // mget values given their keys
 func (r *Redis) mget(directory string, keys ...string) ([]*store.KVPair, error) {
-	replies, err := r.client.MGet(keys...).Result()
+	replies, err := r.client.MGet(context.Background(), keys...).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -544,7 +546,7 @@ func (r *Redis) DeleteTree(directory string) error {
 	if err != nil {
 		return err
 	}
-	return r.client.Del(allKeys...).Err()
+	return r.client.Del(context.Background(), allKeys...).Err()
 }
 
 // AtomicPut is an atomic CAS operation on a single value.
@@ -588,7 +590,7 @@ func (r *Redis) setNX(key string, val *store.KVPair, expirationAfter time.Durati
 		return err
 	}
 
-	if !r.client.SetNX(key, valBlob, expirationAfter).Val() {
+	if !r.client.SetNX(context.Background(), key, valBlob, expirationAfter).Val() {
 		return store.ErrKeyExists
 	}
 	return nil
@@ -647,6 +649,7 @@ func scanRegex(directory string) string {
 
 func (r *Redis) runScript(args ...interface{}) error {
 	err := r.script.Run(
+		context.Background(),
 		r.client,
 		nil,
 		args...,
