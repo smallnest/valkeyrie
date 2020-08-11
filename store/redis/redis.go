@@ -12,7 +12,7 @@ import (
 	"github.com/abronan/valkeyrie"
 	"github.com/abronan/valkeyrie/store"
 
-	"gopkg.in/redis.v5"
+	"gopkg.in/redis.v8"
 )
 
 var (
