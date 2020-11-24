@@ -12,8 +12,7 @@ import (
 
 	"github.com/abronan/valkeyrie"
 	"github.com/abronan/valkeyrie/store"
-
-	redis "github.com/rpcxio/go-redis"
+	"github.com/go-redis/redis/v8"
 )
 
 var (

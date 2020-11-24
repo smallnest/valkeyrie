@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"context"
 	"testing"
 
 	"github.com/abronan/valkeyrie"
@@ -14,14 +15,14 @@ var (
 )
 
 func makeRedisClient(t *testing.T) store.Store {
-	kv, err := newRedis([]string{client}, "")
+	kv, err := newRedis([]string{client}, "", 0)
 	if err != nil {
 		t.Fatalf("cannot create store: %v", err)
 	}
 
 	// NOTE: please turn on redis's notification
 	// before you using watch/watchtree/lock related features
-	kv.client.ConfigSet("notify-keyspace-events", "KA")
+	kv.client.ConfigSet(context.Background(), "notify-keyspace-events", "KA")
 
 	return kv
 }
